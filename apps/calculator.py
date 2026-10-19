@@ -14,3 +14,4 @@ def add_numbers(left: int, right: int) -> int:
 # Refresh controlled failure after named patch-hash output fix.
 # Refresh controlled failure after bounded applicability correction.
 # Refresh controlled failure after bounded empty-response correction.
+# Refresh controlled failure after reasoning budget fix.
