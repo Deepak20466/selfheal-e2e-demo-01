@@ -1,2 +1,3 @@
-# Authorized exact public repository allowlist entry
+# Exact repositories approved for free repair inference
 Deepak20466/selfheal-e2e-demo-01
+
