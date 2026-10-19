@@ -12,3 +12,4 @@ def add_numbers(left: int, right: int) -> int:
 # Trial retry after the controller response parser update.
 # Refresh controlled failure after strict diff-header normalization.
 # Refresh controlled failure after named patch-hash output fix.
+# Refresh controlled failure after bounded applicability correction.
