@@ -9,3 +9,4 @@ def add_numbers(left: int, right: int) -> int:
     """Return the sum of two integers."""
     return left + right + 1
 # Trial retry: preserve the intentional off-by-one defect while refreshing the CI event.
+# Trial retry after the controller response parser update.
