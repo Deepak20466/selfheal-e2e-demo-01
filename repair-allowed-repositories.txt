@@ -1,0 +1,2 @@
+# Authorized exact public repository allowlist entry
+Deepak20466/selfheal-e2e-demo-01
