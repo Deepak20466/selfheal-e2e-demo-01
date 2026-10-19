@@ -15,3 +15,4 @@ def add_numbers(left: int, right: int) -> int:
 # Refresh controlled failure after bounded applicability correction.
 # Refresh controlled failure after bounded empty-response correction.
 # Refresh controlled failure after reasoning budget fix.
+# Refresh controlled failure using configured Laguna S 2.1 free model.
