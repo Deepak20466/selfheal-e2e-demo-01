@@ -48,6 +48,20 @@ class RepairPatchHeaderTests(unittest.TestCase):
         self.assertIn("--- a/path", prompt)
         self.assertIn("+++ b/path", prompt)
 
+    def test_correction_prompt_treats_line_numbers_as_metadata(self):
+        prompt = _prompt(
+            "source",
+            "failure",
+            "previous patch",
+            correction_reason=(
+                "Use these exact lines: <selected_source_context>\n"
+                "12: return left + right + 1\n</selected_source_context>"
+            ),
+        )
+        self.assertIn("numeric labels are metadata only", prompt)
+        self.assertIn("omit them from the diff", prompt)
+        self.assertIn("source text after each label exactly as shown", prompt)
+
     def test_unknown_apply_error_identifies_only_the_validated_single_target(self):
         from pathlib import PurePosixPath
 
