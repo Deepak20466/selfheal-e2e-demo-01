@@ -2,8 +2,16 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from scripts.openrouter_repair import _canonicalize_bare_diff_headers, _prompt
-from scripts.repair_patch_policy import PatchRejected, validate_patch
+from scripts.openrouter_repair import (
+    _apply_failure_context,
+    _canonicalize_bare_diff_headers,
+    _prompt,
+)
+from scripts.repair_patch_policy import (
+    PatchRejected,
+    _safe_apply_diagnostic,
+    validate_patch,
+)
 
 
 PATCH = (
@@ -39,6 +47,38 @@ class RepairPatchHeaderTests(unittest.TestCase):
         self.assertIn("diff --git a/path b/path", prompt)
         self.assertIn("--- a/path", prompt)
         self.assertIn("+++ b/path", prompt)
+
+    def test_unknown_apply_error_identifies_only_the_validated_single_target(self):
+        from pathlib import PurePosixPath
+
+        with TemporaryDirectory() as directory:
+            repo = Path(directory)
+            diagnostic = _safe_apply_diagnostic(
+                b"error: patch fragment without header at line 4\n",
+                [PurePosixPath("apps/calculator.py")],
+                repo,
+            )
+        self.assertEqual(
+            diagnostic,
+            "git apply --check rejected apps/calculator.py at an unspecified line",
+        )
+
+    def test_unknown_apply_line_adds_exact_small_file_context_to_correction(self):
+        with TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / "apps").mkdir()
+            (repo / "apps" / "calculator.py").write_text(
+                "def add(left, right):\n    return left + right + 1\n",
+                encoding="utf-8",
+            )
+            context = _apply_failure_context(
+                "patch does not apply cleanly to the selected commit; "
+                "git apply --check rejected apps/calculator.py at an unspecified line",
+                repo,
+            )
+        self.assertIn("Exact selected-commit source lines 1-2", context)
+        self.assertIn("1: def add(left, right):", context)
+        self.assertIn("2:     return left + right + 1", context)
 
 
 if __name__ == "__main__":

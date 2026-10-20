@@ -152,6 +152,9 @@ def _safe_apply_diagnostic(output: bytes, paths: list[PurePosixPath], root: Path
         if corrupt:
             line_number = int(corrupt.group(1))
             return f"git apply --check rejected a malformed hunk at patch line {line_number}"
+    if len(allowed) == 1:
+        path = next(iter(allowed))
+        return f"git apply --check rejected {path} at an unspecified line"
     return "git apply --check rejected the hunk; diagnostic omitted"
 
 
