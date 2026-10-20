@@ -33,13 +33,41 @@ REPAIR_JSON_SCHEMA: dict[str, Any] = {
             "description": "One concise diagnosis grounded in the supplied failure.",
         },
         "patch": {
-            "type": "string",
-            "description": "One unified git diff, or an empty string if no safe fix is clear.",
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Exact repository-relative Python source path from the supplied source.",
+                },
+                "old_text": {
+                    "type": "string",
+                    "description": "Exact unique source text to replace, including whitespace and newlines.",
+                },
+                "new_text": {
+                    "type": "string",
+                    "description": "Replacement source text; may be empty only for a safe deletion.",
+                },
+            },
+            "required": ["path", "old_text", "new_text"],
+            "additionalProperties": False,
         },
     },
     "required": ["diagnosis", "patch"],
     "additionalProperties": False,
 }
+
+
+def _without_additional_properties(value: Any) -> Any:
+    """Copy the shared strict schema into Gemini's supported JSON Schema subset."""
+    if isinstance(value, dict):
+        return {
+            key: _without_additional_properties(item)
+            for key, item in value.items()
+            if key != "additionalProperties"
+        }
+    if isinstance(value, list):
+        return [_without_additional_properties(item) for item in value]
+    return value
 
 
 class ProviderError(RuntimeError):
@@ -259,9 +287,7 @@ class GeminiProvider:
                 # Gemini supports a JSON Schema subset. Extra keys are still
                 # rejected by the common local parser after the response.
                 "responseSchema": {
-                    key: value
-                    for key, value in REPAIR_JSON_SCHEMA.items()
-                    if key != "additionalProperties"
+                    **_without_additional_properties(REPAIR_JSON_SCHEMA),
                 },
                 "maxOutputTokens": 8192,
                 "temperature": 0.1,

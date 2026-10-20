@@ -6,6 +6,7 @@ This module only parses data. It never imports or executes the target repository
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import hmac
 import re
@@ -118,6 +119,58 @@ def _verify_regular_existing_file(root: Path, relative: PurePosixPath) -> Path:
         if not mode:
             raise PatchRejected("patch target has an invalid file mode")
     return root / Path(*relative.parts)
+
+
+def build_exact_replacement_patch(
+    repository: Path,
+    path_value: str,
+    old_text: str,
+    new_text: str,
+) -> bytes:
+    """Build a one-file diff only from one exact match in an allowed source file."""
+    if not all(isinstance(value, str) for value in (path_value, old_text, new_text)):
+        raise PatchRejected("replacement proposal has an invalid shape")
+    if not old_text or old_text == new_text:
+        raise PatchRejected("replacement proposal is empty or makes no source change")
+    try:
+        old_bytes = old_text.encode("utf-8", errors="strict")
+        new_bytes = new_text.encode("utf-8", errors="strict")
+    except UnicodeEncodeError as exc:
+        raise PatchRejected("replacement text contains invalid Unicode") from exc
+    if len(old_bytes) > 16 * 1024 or len(new_bytes) > 16 * 1024:
+        raise PatchRejected("replacement text exceeds its size limit")
+    if b"\x00" in old_bytes or b"\x00" in new_bytes or b"\r" in old_bytes or b"\r" in new_bytes:
+        raise PatchRejected("replacement text must be UTF-8 with LF line endings")
+
+    root = repository.resolve(strict=True)
+    relative = _safe_source_path(path_value)
+    source_path = _verify_regular_existing_file(root, relative)
+    try:
+        raw_source = source_path.read_bytes()
+        if len(raw_source) > 32 * 1024:
+            raise PatchRejected("replacement source file exceeds its size limit")
+        source = raw_source.decode("utf-8", errors="strict")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise PatchRejected("replacement source file is not readable UTF-8") from exc
+    if "\r" in source:
+        raise PatchRejected("replacement source file must use LF line endings")
+    if source.count(old_text) != 1:
+        raise PatchRejected("replacement source text must match exactly once")
+
+    updated = source.replace(old_text, new_text, 1)
+    path = relative.as_posix()
+    diff = list(
+        difflib.unified_diff(
+            source.splitlines(keepends=True),
+            updated.splitlines(keepends=True),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+        )
+    )
+    if len(diff) < 3:
+        raise PatchRejected("replacement proposal did not produce a diff")
+    patch = f"diff --git a/{path} b/{path}\n" + "".join(diff)
+    return patch.encode("utf-8")
 
 
 def _safe_apply_diagnostic(output: bytes, paths: list[PurePosixPath], root: Path) -> str:
