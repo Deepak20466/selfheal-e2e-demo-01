@@ -41,6 +41,7 @@ MAX_SOURCE_FILES = 40
 MAX_FILE_BYTES = 32 * 1024
 MAX_SOURCE_BYTES = 160 * 1024
 MAX_FAILURE_BYTES = 16 * 1024
+MAX_CORRECTION_SOURCE_BYTES = 16 * 1024
 _DISALLOWED_SOURCE_PARTS = frozenset(
     {".git", ".github", ".venv", "venv", "tests", "test", "__tests__", "scripts", "migrations"}
 )
@@ -296,10 +297,14 @@ def _prompt(
 
 def _apply_failure_context(reason: str, repository: Path) -> str:
     """Add a small exact-source window for a sanitized, validated apply location."""
-    match = re.search(r"git apply --check rejected ([A-Za-z0-9_./-]+) at line (\d+)", reason)
+    match = re.search(
+        r"git apply --check rejected (?P<path>[A-Za-z0-9_./-]+) at "
+        r"(?:line (?P<line>\d+)|an unspecified line)",
+        reason,
+    )
     if not match:
         return reason
-    parts = match.group(1).split("/")
+    parts = match.group("path").split("/")
     if any(part in {"", ".", ".."} for part in parts):
         return reason
     root = repository.resolve(strict=True)
@@ -307,14 +312,20 @@ def _apply_failure_context(reason: str, repository: Path) -> str:
     try:
         if source_path.is_symlink() or not source_path.is_file():
             return reason
+        if source_path.stat().st_size > MAX_CORRECTION_SOURCE_BYTES:
+            return reason
         lines = source_path.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeError):
         return reason
-    location = int(match.group(2))
-    start = max(1, location - 6)
-    end = min(len(lines), location + 6)
-    if not start <= location <= end:
-        return reason
+    raw_location = match.group("line")
+    if raw_location is None:
+        start, end = 1, len(lines)
+    else:
+        location = int(raw_location)
+        start = max(1, location - 6)
+        end = min(len(lines), location + 6)
+        if not start <= location <= end:
+            return reason
     excerpt = "\n".join(
         f"{number}: {_scrub(lines[number - 1])}" for number in range(start, end + 1)
     )
